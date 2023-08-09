@@ -5,21 +5,86 @@
 #include <boost/chrono.hpp>
 #include <boost/thread.hpp>
 #include <boost/date_time.hpp>
+#include <boost/program_options.hpp>
 
 #include <cstring>
 #include <cstdlib>
 #include <string>
 #include <iostream>
-#include <boost/program_options.hpp>
 
+
+/// structure remplie par ligne de commande
 struct progArgs
 {
   std::string sm_stringname; // shared memory identifier
   size_t      sm_size_bytes; // payload size in octets / Bytes
-  size_t      sm_size_mega; // ignoré par la suite
+  size_t      sm_size_mega;  // same in Mo / Mb : ignoré par la suite
   char        value; // valeur unique de tous les élts de la payload
 };
 
+static void usage(int argc, char **argv, progArgs &a);
+
+const char *sm_stringnamestr_g; /// global contenant l'identifiant de la shared memory
+
+
+/*!
+ * @return 0 si tout fonctionne parfaitement
+ */
+int
+main(int argc, char *argv[])
+{
+	// usage & argument parsing
+	progArgs args;
+	usage(argc, argv, args);
+	
+	sm_stringnamestr_g = args . sm_stringname . c_str();
+	
+	//Parent process
+	{
+		using namespace boost::interprocess;
+		
+		std::cout << "\nparent launched (SM name=" << sm_stringnamestr_g << ")" << std::flush;
+		
+		//Remove shared memory on construction and destruction
+		struct shm_remove
+		{
+		  shm_remove()
+		  { shared_memory_object::remove(sm_stringnamestr_g); }
+		  ~shm_remove()
+		  { shared_memory_object::remove(sm_stringnamestr_g); }
+		};
+		struct shm_remove remover;
+		
+		//Create a shared memory object.
+		shared_memory_object shm(create_only, sm_stringnamestr_g, read_write);
+		
+		//Set size
+		shm . truncate(args . sm_size_bytes * sizeof(char));
+		
+		//Map the whole shared memory in this process
+		mapped_region region(shm, read_write);
+		
+		//Write all the memory to value
+		std::memset(region . get_address(), args . value, region . get_size());
+		
+		std::cout << "IPC server: pool of size " << args.sm_size_bytes << "octets/Bytes or" <<
+		static_cast<float>(args.sm_size_bytes) / (1024*1024) << "MB/Mo" << std::flush;
+		
+
+		// assurer la persistance de la mémoire partagée
+		size_t c = 0;
+		do
+			{
+				boost::this_thread::sleep_for(boost::chrono::milliseconds(1000));
+			}
+		while (++c > 0);
+		
+	}
+	return 0;
+}
+
+
+// ==================================================================
 
 /*!
  * @brief usage: affiche aide par défaut en ligne de commande si aucun argument.
@@ -75,71 +140,3 @@ usage(int argc, char **argv, progArgs &a)
 		a . sm_size_bytes = a . sm_size_mega * 1024 * 1024;
 }
 
-
-const char *sm_stringnamestr_g; /// global contenant l'identifiant de la shared memory
-
-
-/*!
-
- * @return 0 si tout fonctionne parfaitement
- */
-int
-main(int argc, char *argv[])
-{
-	// usage & argument parsing
-	progArgs args;
-	usage(argc, argv, args);
-	
-	sm_stringnamestr_g = args . sm_stringname . c_str();
-	
-	//Parent process
-	{
-		using namespace boost::interprocess;
-		
-		std::cout << "\nparent launched (SM name=" << sm_stringnamestr_g << ")" << std::flush;
-		
-		//Remove shared memory on construction and destruction
-		struct shm_remove
-		{
-		  shm_remove()
-		  { shared_memory_object::remove(sm_stringnamestr_g); }
-		  ~shm_remove()
-		  { shared_memory_object::remove(sm_stringnamestr_g); }
-		};
-		struct shm_remove remover;
-		
-		//Create a shared memory object.
-		shared_memory_object shm(create_only, sm_stringnamestr_g, read_write);
-		
-		//Set size
-		shm . truncate(args . sm_size_bytes * sizeof(char));
-		
-		//Map the whole shared memory in this process
-		mapped_region region(shm, read_write);
-		
-		//Write all the memory to value
-		std::memset(region . get_address(), args . value, region . get_size());
-		
-		std::cout << "IPC server: pool of size " << args.sm_size_bytes << "octets/Bytes or" <<
-		static_cast<float>(args.sm_size_bytes) / (1024*1024) << "MB/Mo" << std::flush;
-		
-		#if 0
-		//Launch child process
-		std::string s(argv[0]);
-		s += " child ";
-		if ( 0 != std::system(s . c_str()))
-			return 1;
-		#endif
-		
-		// assurer la persistance de la mémoire partagée
-		size_t c = 0;
-		return 0;
-		do
-			{
-				boost::this_thread::sleep_for(boost::chrono::milliseconds(200));
-			}
-		while (++ c > 0);
-		
-	}
-	return 0;
-}
