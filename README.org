@@ -1,0 +1,56 @@
+* Objectif
+
+  Vérifier les performances respectives de TCP et IPC dans le cas d'une communication locale, sachant que:
+  - TCP sera extensible à un réseau local contrairement à une mémoire partagée
+  - La taille de données standard varie de quelques octets (chaines, nombres) à quelques centaines d'octets (chaine json).
+
+* implémentation
+
+  - Une paire d'exe client et serveur pour TCP (TCP_srv_sync.exe / TCP_client.exe)
+  - et pour IPC (  )
+  - chacun permet de définir un pool de données de test côté serveur à transmettre à tout client qui se connecte
+  - le client mesure le taux de transfert du message
+  - *toujours utiliser release* : perfs mesurées en debug sont très basses
+  - l'intégrité du message est vérifiée séparément (todo: TCP)
+  - le serveur et le client sont à lancer sur des terminaux différents
+  - le serveur doit subsister
+
+
+* exemple d'usage
+** ligne de commande & program_options
+   boost::program_options utilisé par tous les programmes.
+   chaque programme affiche par défaut son aide avec les paramètres accessibles (obligatoires & valeurs par défaut).
+
+** TCP  
+
+   par défaut, client et serveur se connectent au réseau local (cf option -i)
+
+   Sur un terminal:
+   #+BEGIN_SRC bash
+   .\TCP_srv_sync.exe --port 666 --sizeB 128
+   #+END_SRC
+
+   Le serveur TCP crée un buffer de 128 octets et le met à disposition sur le port 666.
+
+   laisser tourner et basculer sur autre terminal.
+   
+   #+BEGIN_SRC bash
+   .\TCP_client.exe --port 666 -p 8
+   #+END_SRC
+
+   le client va se connecter au serveur et ramener le message par paquets de 8 octets
+
+   Le serveur affiche un message quand un client se connecte?
+   Le client mesure le temps de transfert (µs) et le taux de transfert (Mo/s)
+
+   #+BEGIN_QUOTE
+   Termine !
+
+   client: durations (µs):617
+   client: bandwidth (Mo/s): 0.197845 (packet size: 8)
+   #+END_QUOTE
+
+* TODO
+  - gestion exceptions / erreur très perfectible
+  - vérification données en TCP: contenu et ordre des paquets
+  - TCP: essai asynchrone
