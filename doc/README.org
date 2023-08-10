@@ -4,6 +4,8 @@
   - TCP sera extensible à un réseau local contrairement à une mémoire partagée
   - La taille de données standard varie de quelques octets (chaines, nombres) à quelques centaines d'octets (chaine json).
 
+  Utiliser boost autant que possible; se baser sur des exemples existants.
+
 * implémentation
 
   - Une paire d'exe client et serveur pour TCP (TCP_srv_sync.exe / TCP_client.exe)
@@ -14,6 +16,7 @@
   - l'intégrité du message est vérifiée séparément (todo: TCP)
   - le serveur et le client sont à lancer sur des terminaux différents
   - le serveur doit subsister
+  - ici, le client ne connait pas la taille du pool côté serveur. Le pool est ramené en entier
 
 
 * exemple d'usage
@@ -38,9 +41,10 @@
    .\TCP_client.exe --port 666 -p 8
    #+END_SRC
 
-   le client va se connecter au serveur et ramener le message par paquets de 8 octets
+   le client va se connecter au serveur et ramener le message, ici par paquets de 8 octets.
+   *!* Les paquets sont recopiés dans l'ordre dans un buffer final, de taille max. 512Mo (TODO)
 
-   Le serveur affiche un message quand un client se connecte?
+   Le serveur affiche un message quand un client se connecte.
    Le client mesure le temps de transfert (µs) et le taux de transfert (Mo/s)
 
    #+BEGIN_QUOTE
@@ -50,7 +54,44 @@
    client: bandwidth (Mo/s): 0.197845 (packet size: 8)
    #+END_QUOTE
 
+** IPC
+
+   Le serveur crée une mémoire partagée dans le système. 
+   Par défaut, il nettoie la mémoire partagée en fin de programme. De ce fait, on assure ici artificiellement la persistance du serveur. Peut faire autrement?
+
+   #+BEGIN_SRC bash
+   .\IPC_server.exe -t coucou --sizeB 128 -v 3
+   #+END_SRC
+
+   Il affiche le pool (taille et nom), et continue à tourner en attente client.
+
+   #+BEGIN_QUOTE
+   parent launched (SM name=coucou)IPC server: pool of size 128octets/Bytes or0.00012207MB/Mo
+   #+END_QUOTE
+   
+   côté client:
+
+   #+BEGIN_SRC bash
+   .\IPC_client.exe -t coucou -v 3
+   #+END_SRC
+   
+   #+BEGIN_QUOTE
+   client launched
+   client: shared mem ok, durations (µs):2490 (init sm) / 3 (copy sm payload)
+   client: region size: 128 bytes / 0 Mo
+   bandwidth: 40.6901(Mo/s)
+   #+END_QUOTE
+   
+   le client mesure:
+   - le temps d'accès au pool de mémoire partagée (généralement constant peu importe taille du pool) 
+   - et le temps de copie des données du pool sur un buffer local. Ce dernier temps dépend de la taille du pool
+   - Il déduit la vitesse de transfert à partir du second
+
+
 * TODO
   - gestion exceptions / erreur très perfectible
   - vérification données en TCP: contenu et ordre des paquets
-  - TCP: essai asynchrone
+  - TCP: essai asynchrone (perfs, collecte paquets?)
+  - TCP: afficher le pool de données comme IPC
+  - TCP: gérer la taille max du buffer de réception des messages agrégés si utile.
+  - ICP: possible sans serveur?
